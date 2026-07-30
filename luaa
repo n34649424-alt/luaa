@@ -1,0 +1,334 @@
+-- Natthakorn (Block Spin) - Universal Mobile & PC Final Version
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- ⚙️ การตั้งค่าหลัก
+local Settings = {
+    Enabled = false,
+    TeamCheck = true,
+    AimPart = "Head",
+    FOV = 150
+}
+
+local showFovUI = false
+local espNameEnabled = false
+local espHealthEnabled = false
+
+-- 🎯 สร้างวงกลม FOV
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+FOVCircle.Radius = Settings.FOV
+FOVCircle.Filled = false
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Thickness = 1.5
+FOVCircle.Visible = false
+
+-- ScreenGui Setup (รองรับ CoreGui และ PlayerGui อัตโนมัติ)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "NK_Universal_UI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local parentSuccess, _ = pcall(function()
+    ScreenGui.Parent = game:GetService("CoreGui")
+end)
+if not parentSuccess then
+    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+-- ฟังก์ชันรองรับการกดทั้ง PC และมือถือ
+local function makeClickable(btn, callback)
+    btn.MouseButton1Click:Connect(callback)
+    btn.TouchTap:Connect(callback)
+end
+
+-- ==================== 1. VERIFICATION FRAME (หน้ายืนยันตัวตน) ====================
+local AuthFrame = Instance.new("Frame")
+AuthFrame.Name = "AuthFrame"
+AuthFrame.Parent = ScreenGui
+AuthFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+AuthFrame.Position = UDim2.new(0.5, -130, 0.3, 0)
+AuthFrame.Size = UDim2.new(0, 260, 0, 280)
+AuthFrame.Active = true
+AuthFrame.Draggable = true
+
+local AuthCorner = Instance.new("UICorner")
+AuthCorner.CornerRadius = UDim.new(0, 12)
+AuthCorner.Parent = AuthFrame
+
+local AuthTitle = Instance.new("TextLabel")
+AuthTitle.Parent = AuthFrame
+AuthTitle.Position = UDim2.new(0, 0, 0, 12)
+AuthTitle.Size = UDim2.new(1, 0, 0, 20)
+AuthTitle.BackgroundTransparency = 1
+AuthTitle.Text = "Natthakorn (Block Spin)"
+AuthTitle.TextColor3 = Color3.fromRGB(255, 215, 0)
+AuthTitle.Font = Enum.Font.SourceSansBold
+AuthTitle.TextSize = 16
+
+local AuthSub = Instance.new("TextLabel")
+AuthSub.Parent = AuthFrame
+AuthSub.Position = UDim2.new(0, 0, 0, 32)
+AuthSub.Size = UDim2.new(1, 0, 0, 15)
+AuthSub.BackgroundTransparency = 1
+AuthSub.Text = "ยินดีต้อนรับผู้ใช้งาน"
+AuthSub.TextColor3 = Color3.fromRGB(180, 180, 180)
+AuthSub.Font = Enum.Font.SourceSans
+AuthSub.TextSize = 12
+
+local AuthAvatar = Instance.new("ImageLabel")
+AuthAvatar.Parent = AuthFrame
+AuthAvatar.Position = UDim2.new(0.5, -40, 0, 55)
+AuthAvatar.Size = UDim2.new(0, 80, 0, 80)
+AuthAvatar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+
+local AvatarCorner = Instance.new("UICorner")
+AvatarCorner.CornerRadius = UDim.new(1, 0)
+AvatarCorner.Parent = AuthAvatar
+
+pcall(function()
+    local content = Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
+    AuthAvatar.Image = content
+end)
+
+local NameLabel = Instance.new("TextLabel")
+NameLabel.Parent = AuthFrame
+NameLabel.Position = UDim2.new(0, 10, 0, 142)
+NameLabel.Size = UDim2.new(1, -20, 0, 18)
+NameLabel.BackgroundTransparency = 1
+NameLabel.Text = LocalPlayer.DisplayName
+NameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+NameLabel.Font = Enum.Font.SourceSansBold
+NameLabel.TextSize = 15
+
+local UsernameLabel = Instance.new("TextLabel")
+UsernameLabel.Parent = AuthFrame
+UsernameLabel.Position = UDim2.new(0, 10, 0, 160)
+UsernameLabel.Size = UDim2.new(1, -20, 0, 15)
+UsernameLabel.BackgroundTransparency = 1
+UsernameLabel.Text = "@" .. LocalPlayer.Name
+UsernameLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+UsernameLabel.Font = Enum.Font.SourceSans
+UsernameLabel.TextSize = 11
+
+local ReadyBtn = Instance.new("TextButton")
+ReadyBtn.Parent = AuthFrame
+ReadyBtn.Position = UDim2.new(0, 20, 0, 195)
+ReadyBtn.Size = UDim2.new(0, 220, 0, 42)
+ReadyBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 80)
+ReadyBtn.Text = "🚀 เริ่มใช้งานสคริปต์"
+ReadyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ReadyBtn.Font = Enum.Font.SourceSansBold
+ReadyBtn.TextSize = 14
+
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.CornerRadius = UDim.new(0, 8)
+BtnCorner.Parent = ReadyBtn
+
+-- ==================== 2. MAIN MENU (เมนูหลัก) ====================
+local OpenBtn = Instance.new("TextButton")
+OpenBtn.Parent = ScreenGui
+OpenBtn.Position = UDim2.new(0.02, 0, 0.2, 0)
+OpenBtn.Size = UDim2.new(0, 40, 0, 40)
+OpenBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+OpenBtn.Text = "NK"
+OpenBtn.TextColor3 = Color3.fromRGB(255, 215, 0)
+OpenBtn.Font = Enum.Font.SourceSansBold
+OpenBtn.TextSize = 18
+OpenBtn.Active = true
+OpenBtn.Draggable = true
+OpenBtn.Visible = false
+
+local OpenCorner = Instance.new("UICorner")
+OpenCorner.CornerRadius = UDim.new(1, 0)
+OpenCorner.Parent = OpenBtn
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MainFrame.Position = UDim2.new(0.5, -125, 0.2, 0)
+MainFrame.Size = UDim2.new(0, 250, 0, 310)
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Visible = false
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Parent = MainFrame
+TitleLabel.Position = UDim2.new(0, 12, 0, 8)
+TitleLabel.Size = UDim2.new(0, 200, 0, 20)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "Natthakorn (block spin)"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+TitleLabel.Font = Enum.Font.SourceSansBold
+TitleLabel.TextSize = 15
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local HideBtn = Instance.new("TextButton")
+HideBtn.Parent = MainFrame
+HideBtn.Position = UDim2.new(1, -26, 0, 8)
+HideBtn.Size = UDim2.new(0, 20, 0, 20)
+HideBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+HideBtn.Text = "—"
+HideBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+HideBtn.Font = Enum.Font.SourceSansBold
+HideBtn.TextSize = 12
+
+local HideCorner = Instance.new("UICorner")
+HideCorner.CornerRadius = UDim.new(1, 0)
+HideCorner.Parent = HideBtn
+
+makeClickable(OpenBtn, function() MainFrame.Visible = not MainFrame.Visible end)
+makeClickable(HideBtn, function() MainFrame.Visible = not MainFrame.Visible end)
+
+local function createButton(parent, text, posY, color)
+    local btn = Instance.new("TextButton")
+    btn.Parent = parent
+    btn.BackgroundColor3 = color or Color3.fromRGB(180, 30, 30)
+    btn.Position = UDim2.new(0, 12, 0, posY)
+    btn.Size = UDim2.new(0, 226, 0, 28)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 12
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+    return btn
+end
+
+-- ปุ่มฟังก์ชันต่างๆ
+local AimToggleBtn = createButton(MainFrame, "🎯 ล็อกตามหัว (HeadLock): OFF", 35, Color3.fromRGB(180, 30, 30))
+local TeamToggleBtn = createButton(MainFrame, "🛡️ ไม่ล็อคเพื่อน (TeamCheck): ON", 68, Color3.fromRGB(0, 150, 70))
+local FovToggleBtn = createButton(MainFrame, "⭕ แสดงวงกลม FOV: OFF", 101, Color3.fromRGB(180, 30, 30))
+local EspNameBtn = createButton(MainFrame, "👤 มองชื่อ + รูป: OFF", 134, Color3.fromRGB(180, 30, 30))
+local EspHealthBtn = createButton(MainFrame, "❤️ มองแถบเลือด (HP): OFF", 167, Color3.fromRGB(180, 30, 30))
+local ServerSGBtn = createButton(MainFrame, "🇸🇬 ย้ายเซิฟ: สิงคโปร์ (SG)", 200, Color3.fromRGB(0, 100, 200))
+local ServerMEBtn = createButton(MainFrame, "🇦🇪 ย้ายเซิฟ: อาหรับ (ME)", 233, Color3.fromRGB(180, 120, 0))
+
+-- ฟังก์ชันย้ายเซิฟเวอร์
+local function hopServer(regionCode)
+    ServerSGBtn.Text = "⏳ กำลังค้นหาเซิฟเวอร์..."
+    ServerMEBtn.Text = "⏳ กำลังค้นหาเซิฟเวอร์..."
+    
+    pcall(function()
+        local servers = {}
+        local cursor = ""
+        
+        repeat
+            local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+            if cursor ~= "" then
+                url = url .. "&cursor=" .. cursor
+            end
+            local success, result = pcall(function()
+                return HttpService:JSONDecode(game:HttpGet(url))
+            end)
+            
+            if success and result and result.data then
+                for _, s in ipairs(result.data) do
+                    if s.playing and s.maxPlayers and s.playing < s.maxPlayers and s.id ~= game.JobId then
+                        local pingStr = tostring(s.ping or ""):lower()
+                        local nameStr = tostring(s.name or ""):lower()
+                        
+                        if regionCode == "SG" then
+                            if pingStr:find("sg") or pingStr:find("singapore") or nameStr:find("singapore") or (s.ping and s.ping < 80) then
+                                table.insert(servers, s.id)
+                            end
+                        elseif regionCode == "ME" then
+                            if pingStr:find("ae") or pingStr:find("dubai") or pingStr:find("middle east") or pingStr:find("bahrain") or nameStr:find("dubai") or nameStr:find("uae") then
+                                table.insert(servers, s.id)
+                            end
+                        end
+                    end
+                end
+                cursor = result.nextPageCursor
+            else
+                break
+            end
+        until cursor == nil or #servers > 0
+
+        if #servers == 0 then
+            local urlFallback = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+            local success, result = pcall(function()
+                return HttpService:JSONDecode(game:HttpGet(urlFallback))
+            end)
+            if success and result and result.data then
+                for _, s in ipairs(result.data) do
+                    if s.playing and s.maxPlayers and s.playing < s.maxPlayers and s.id ~= game.JobId then
+                        table.insert(servers, s.id)
+                    end
+                end
+            end
+        end
+
+        if #servers > 0 then
+            local randomServer = servers[math.random(1, #servers)]
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, randomServer, LocalPlayer)
+        else
+            TeleportService:Teleport(game.PlaceId, LocalPlayer)
+        end
+    end)
+end
+
+-- กดปุ่มเริ่มต้นเข้าเมนู
+makeClickable(ReadyBtn, function()
+    AuthFrame:Destroy()
+    OpenBtn.Visible = true
+    MainFrame.Visible = true
+end)
+
+makeClickable(AimToggleBtn, function()
+    Settings.Enabled = not Settings.Enabled
+    AimToggleBtn.Text = "🎯 ล็อกตามหัว (HeadLock): " .. (Settings.Enabled and "ON" or "OFF")
+    AimToggleBtn.BackgroundColor3 = Settings.Enabled and Color3.fromRGB(0, 150, 70) or Color3.fromRGB(180, 30, 30)
+end)
+
+makeClickable(TeamToggleBtn, function()
+    Settings.TeamCheck = not Settings.TeamCheck
+    TeamToggleBtn.Text = "🛡️ ไม่ล็อคเพื่อน (TeamCheck): " .. (Settings.TeamCheck and "ON" or "OFF")
+    TeamToggleBtn.BackgroundColor3 = Settings.TeamCheck and Color3.fromRGB(0, 150, 70) or Color3.fromRGB(180, 30, 30)
+end)
+
+makeClickable(FovToggleBtn, function()
+    showFovUI = not showFovUI
+    FovToggleBtn.Text = "⭕ แสดงวงกลม FOV: " .. (showFovUI and "ON" or "OFF")
+    FovToggleBtn.BackgroundColor3 = showFovUI and Color3.fromRGB(0, 150, 70) or Color3.fromRGB(180, 30, 30)
+    FOVCircle.Visible = showFovUI
+end)
+
+makeClickable(ServerSGBtn, function() hopServer("SG") end)
+makeClickable(ServerMEBtn, function() hopServer("ME") end)
+
+-- ลูปการทำงานระบบล็อกหัว
+RunService.RenderStepped:Connect(function()
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    FOVCircle.Visible = showFovUI and Settings.Enabled
+
+    if Settings.Enabled then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                if not Settings.TeamCheck or (player.Team ~= LocalPlayer.Team or player.Team == nil) then
+                    local character = player.Character
+                    if character and character:FindFirstChild("Head") and character:FindFirstChildOfClass("Humanoid") then
+                        if character.Humanoid.Health > 0 then
+                            Camera.CFrame = CFrame.new(Camera.CFrame.Position, character.Head.Position)
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+print("[SUCCESS] Natthakorn Script Loaded Successfully for Everyone!")
